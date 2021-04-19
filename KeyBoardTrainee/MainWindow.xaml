@@ -27,6 +27,9 @@
         <StackPanel Orientation="Horizontal" Grid.Row="1" FlowDirection="RightToLeft">
             <Button x:Name="Button_End" HorizontalAlignment="Right" Padding="15 5 15 5" FontSize="25" FontWeight="Bold" Margin="5" Click="Button_End_Click">End</Button>
             <Button x:Name="Button_Start" HorizontalAlignment="Right" Padding="15 5 15 5" FontSize="25" FontWeight="Bold" Margin="5" Click="Button_Start_Click">Start</Button>
+            <Button x:Name="Button_Results" HorizontalAlignment="Right" Padding="15 5 15 5" FontSize="25" FontWeight="Bold" Margin="5" Click="Button_Results_Click" >Results</Button>
+            <Button x:Name="Button_Registration" HorizontalAlignment="Right" Padding="15 5 15 5" FontSize="25" FontWeight="Bold" Margin="5" Click="Button_Registration_Click"   >Registration</Button>
+            <Button x:Name="Button_Login" HorizontalAlignment="Right" Padding="15 5 15 5" FontSize="25" FontWeight="Bold" Margin="5" Click="Button_Login_Click"  >Login</Button>
         </StackPanel>
         <Grid Grid.Row="2">
                 <Grid.RowDefinitions>

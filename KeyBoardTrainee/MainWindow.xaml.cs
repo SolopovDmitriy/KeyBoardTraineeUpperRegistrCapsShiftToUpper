@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,6 +14,10 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using SQLiteORM;
+
+
+
 
 namespace KeyBoardTrainee
 {
@@ -21,16 +26,26 @@ namespace KeyBoardTrainee
     /// </summary>
     public partial class MainWindow : Window
     {
+        private DB db;
         private string[] _quests = {
            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua",
            "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur",
            "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum"
         };
+        //private string[] _quests = {
+        //   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        //   "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        //   "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+        //};
         private int _indexQuest = -1; //идекс текущей задачи
         private int _indexCurrentLetter = 0; //индекс вводимого символа
         private string _userResult = "";
         private int _countFails = 0; //количество ошибок
         private int _countTotal = 0; //количество нажатых клавиш
+        private int _userTextLength = 0; //размер введенного текста
+        private TextPointer startPosition;
+
+
 
         private DispatcherTimer _taskTimer; //таймер одного раунда
         private DateTime _startTime;
@@ -42,6 +57,7 @@ namespace KeyBoardTrainee
         public MainWindow()
         {
             InitializeComponent();
+            db = new DB();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -79,6 +95,7 @@ namespace KeyBoardTrainee
                 _indexQuest = random.Next(0, _quests.Length);
                 RTextBox_QuestText.Document.Blocks.Clear();
                 RTextBox_QuestText.Document.Blocks.Add(new Paragraph(new Run(_quests[_indexQuest])));
+                startPosition = RTextBox_QuestText.CaretPosition;
             }
         }
 
@@ -91,8 +108,15 @@ namespace KeyBoardTrainee
 
                 _endTime = DateTime.Now;
                 _elapsedTime = _endTime - _startTime;
-                MessageBox.Show(_elapsedTime.Milliseconds.ToString());
+                MessageBox.Show("_elapsedTime" + _elapsedTime.Milliseconds.ToString());
                 _taskTimer.Stop();
+
+                db.SaveResult(_elapsedTime.Milliseconds);
+
+                List<int> results = db.GetAllResult();
+                MessageBox.Show("all results: " + String.Join(",", results));
+
+
             }
         }
 
@@ -165,53 +189,85 @@ namespace KeyBoardTrainee
                 keysToPrint[Key.OemComma] = ",";
                 keysToPrint[Key.OemPlus] = "=";
                 keysToPrint[Key.Oem3] = "~";
-
-
-                //keys.Contains
-
-                if (keySymbol.Length == 1 || key == Key.Back || keysToPrint.ContainsKey(key))
-                {
+               
+                if (keySymbol.Length == 1 || key == Key.Back || keysToPrint.ContainsKey(key)) // 
+                {                   
                     _userResult = "";
                     if (keysToPrint.ContainsKey(key))
                     {
                         _userResult = keysToPrint[key];
+                        _userTextLength++;
                     }                    
                     else if (key == Key.Back) //BackSpace
-                    {                       
+                    {
+
+                        // quick delete
+                        //startPosition.DeleteTextInRun(1);
                         string richText = new TextRange(
                             RTextBox_UserText.Document.ContentStart, /*позиция начала набранного текста*/
-                            RTextBox_UserText.Document.ContentEnd).Text; //позиция конца набранного текста
-                        MessageBox.Show(richText.Length + " " + _indexCurrentLetter);
+                            RTextBox_UserText.Document.ContentEnd).Text; //позиция конца набранного текста                       
                         if (richText.Length > 0  && richText.Length - 2  > _indexCurrentLetter)
                         {
                             richText = richText.Substring(0, richText.Length - 3);
+                            _userTextLength--;
+                            TextPointer endPosition2 = startPosition.GetNextInsertionPosition(LogicalDirection.Backward);
+                            TextRange textRange2 = new TextRange(startPosition, endPosition2);
+                            textRange2.ApplyPropertyValue(TextElement.BackgroundProperty, Brushes.Aqua);
+                            startPosition = endPosition2;
                         }
-
                         RTextBox_UserText.Document.Blocks.Clear();
                         RTextBox_UserText.AppendText(richText);
+
+                        TextBlock_Total.Text = _userTextLength + " ";
+                        // for test
+                        //ChangeColorQuestText(0, _userTextLength, Brushes.Green); // _userTextLength = 5; 0,1,2,3,4 - Green, 5, 6, 7, ... 49 - Aqua
+                        //ChangeColorQuestText(_userTextLength, _quests[_indexQuest].Length, Brushes.Aqua);
+                       
+
                         return;
                     }
                     else
                     {
                         _userResult = keySymbol;
+                        _userTextLength++;
                     }
 
                     // "a" - string;  'a' - char
                     if (_userResult.Length > 0 && _quests[_indexQuest][_indexCurrentLetter] == _userResult[0])
                     {
-                        //угадал
+                        //угадал   
                         _indexCurrentLetter++;
+                        TextPointer endPosition = startPosition.GetNextInsertionPosition(LogicalDirection.Forward);
+                        var textRange = new TextRange(startPosition, endPosition);
+                        textRange.ApplyPropertyValue(TextElement.BackgroundProperty, Brushes.Green);
+                        startPosition = endPosition;
                     }
                     else
                     {
-                        _countFails++;
+                        _countFails++;                           
                         TextBlock_Fails.Text = "Fails: " + _countFails;
-                    }
+                        TextPointer endPosition = startPosition.GetNextInsertionPosition(LogicalDirection.Forward);
+                        var textRange = new TextRange(startPosition, endPosition);
+                        textRange.ApplyPropertyValue(TextElement.BackgroundProperty, Brushes.Red);
+                        startPosition = endPosition;
 
+                    }
                     RTextBox_UserText.AppendText(_userResult);
 
-                    _countTotal++;
-                    TextBlock_Total.Text = "Total: " + _countTotal;
+                    string richText2 = new TextRange(
+                            RTextBox_UserText.Document.ContentStart,
+                            RTextBox_UserText.Document.ContentEnd).Text;
+
+                    //ChangeColorQuestText(0, _userTextLength, Brushes.Green);
+                    //ChangeColorQuestText(_userTextLength, _quests[_indexQuest].Length, Brushes.Aqua);                
+
+                    //ChangeColorQuestText(0, 5, Brushes.Green);
+                    //ChangeColorQuestText(5, _quests[_indexQuest].Length, Brushes.Aqua);
+
+                    _countTotal++;                
+
+                     TextBlock_Total.Text = "Total: " + _countTotal;
+                    //TextBlock_Total.Text = _userTextLength + " " + richText2.Length;
                 }
                 else
                 {
@@ -243,6 +299,55 @@ namespace KeyBoardTrainee
 
                 MessageBox.Show(ex.Message);
             }
+        }
+
+
+        private void ChangeColorQuestText(int start, int end, Brush brush) // start inclusive, end exclusive
+        {
+            //TextPointer startPosition = RTextBox_QuestText.CaretPosition.GetPositionAtOffset(start);
+            //TextPointer endPosition = RTextBox_QuestText.CaretPosition.GetPositionAtOffset(end);
+            TextPointer contentStartPosition = RTextBox_QuestText.Document.ContentStart;
+            TextPointer startPosition = contentStartPosition.GetPositionAtOffset(start);
+            TextPointer endPosition = startPosition.GetPositionAtOffset(end-start);
+            //MessageBox.Show(contentStartPosition.ToString() + " " + startPosition + " " + endPosition);
+            var textRange = new TextRange(startPosition, endPosition);
+            //MessageBox.Show(textRange.Text + textRange.Text.Length);
+            textRange.ApplyPropertyValue(TextElement.BackgroundProperty, brush);
+        }
+
+
+
+        private void Button_Results_Click(object sender, RoutedEventArgs e)
+        {
+            BestResultsWindow bestResultsWindow = new BestResultsWindow();
+            //bestResultsWindow.Show(); //запуск в режиме немодальное окно
+            bestResultsWindow.Owner = this;
+            bestResultsWindow.WindowStartupLocation = WindowStartupLocation.Manual;
+
+            var loc = this.PointToScreen(new Point(0, 0));
+            bestResultsWindow.Left = loc.X + this.Width;
+            bestResultsWindow.Top = loc.Y;
+
+
+            bestResultsWindow.ShowDialog(); //запуск в режиме модальное окно
+        }
+
+        private void Button_Registration_Click(object sender, RoutedEventArgs e)
+        {
+            RegistrationWindow registrationWindow = new RegistrationWindow(db);
+            //registrationWindow.Show(); //запуск в режиме немодальное окно
+            registrationWindow.Owner = this;
+            registrationWindow.WindowStartupLocation = WindowStartupLocation.Manual;
+            registrationWindow.ShowDialog(); //запуск в режиме модальное окно
+        }
+
+        private void Button_Login_Click(object sender, RoutedEventArgs e)
+        {
+            LoginWindow loginWindow = new LoginWindow(db);
+            //registrationWindow.Show(); //запуск в режиме немодальное окно
+            loginWindow.Owner = this;
+            loginWindow.WindowStartupLocation = WindowStartupLocation.Manual;
+            loginWindow.ShowDialog(); //запуск в режиме модальное окно
         }
     }
 }
